@@ -1,75 +1,89 @@
 # living-data
 
-**A system where data is permanently changed by interaction — and so is the thing that interacted with it.**
+**One operation that exists in every computing system ever built is undefined here.**
 
-This is not a framework. Not a library. Not a product.
+```
+read(entity) → content
+```
 
-It is a set of **interaction laws** for data systems — laws strict enough that violating them collapses the system into something that already exists.
+Returning content without mutating the state of both the entity and the accessor.
+
+Legal everywhere. HTTP GET. SQL SELECT. File open. All of them.
+
+**Undefined here.** Not blocked. Not logged. Undefined — the way division by zero is undefined.
 
 ---
 
-## The One Thing This Changes
-
-In every existing system:
+## What Replaces It
 
 ```
-read(data) → output
-// data is unchanged. reader is unchanged. nothing happened.
+witness(entity, accessor) → { content, imprint, entityState }
 ```
 
-In this system:
+Every access is an exchange. Both parties are permanently changed. Neither can behave as if the encounter did not happen.
 
-```
-witness(data, accessor) → { content, imprint, newEntityState }
-// data is changed. accessor is changed. encounter is irrevocable.
-```
-
-There is no `read()`. It does not exist.
+That is the only operation that returns content in this system.
 
 ---
 
-## First Primitive: WITNESS
+## What This Makes Impossible
 
-| Property | Value |
-|---|---|
-| **Object** | Any data entity |
-| **Operation** | `witness(entity, accessor)` |
-| **Precondition** | Accessor must have persistent identity. Anonymous access is undefined — not blocked, undefined. |
-| **State change — entity** | Witness record appended. Stability state recalculates. Future behavior changes. |
-| **State change — accessor** | Imprint written. Attestation capability granted. Obligation recorded. |
-| **Irreversibility** | Neither party can return to pre-encounter state. Records are append-only. |
-| **Constraint** | `witness()` is the only access path. There is no bypass. |
+- Accessing data without altering it: **impossible**
+- Observing without being changed by observation: **impossible**
+- Separating data from its interaction history: **impossible**
+- Treating data as static: **impossible**
 
-**What becomes impossible after WITNESS:** Deniability. Neither party can structurally behave as if the encounter did not happen.
-
-**What breaks if WITNESS is removed:** Attestation collapses. Stability collapses. The system becomes a logging system with no behavioral consequence — which is every system that already exists.
+These are not forbidden. They are undefined. The operations do not exist in the system.
 
 ---
 
-## Minimal Example
+## The Six Laws
 
-See [`examples/witnessed-document.md`](./examples/witnessed-document.md) — the smallest possible system where WITNESS must exist.
+See [`LAWS.md`](./LAWS.md) for precise, code-form definitions of every constraint.
+
+Each law includes:
+- The exact forbidden operation
+- The required postconditions
+- A non-compliance test
+
+---
+
+## The Minimal System
+
+```
+Entity state:    { content, witnesses: append-only[], stability: f(witnesses) }
+Accessor state:  { identity: persistent, imprints: append-only[] }
+
+One operation:   witness(entity, accessor)
+                   → appends to entity.witnesses
+                   → appends to accessor.imprints
+                   → recalculates entity.stability
+                   → returns content + imprint
+
+No other operation returns content. Ever.
+```
+
+See [`examples/witnessed-document.md`](./examples/witnessed-document.md) for the smallest real system built on this.
+
+---
+
+## What This Is
+
+A new constraint on interaction — not a philosophy of data.
+
+Primitives are always constraints. UNDO constrained time. CLIPBOARD constrained copy. WITNESS constrains observation.
+
+The constraint is: **observation is never free**.
 
 ---
 
 ## Repository Map
 
 ```
-primitives/     — formal definitions of each interaction law
-architecture/   — the assumptions being replaced
-implementation/ — specs and domain candidates for building
-examples/       — minimal systems demonstrating each primitive
-log/            — settled decisions, append-only
+LAWS.md              — six system laws in code-like precision
+CONSTRAINTS.md       — compliance tests for each law
+primitives/          — formal definitions of each primitive
+examples/            — minimal systems where the laws must hold
+architecture/        — the assumptions being replaced
+log/                 — settled decisions, append-only
 ```
-
----
-
-## Status
-
-One primitive defined and settled: **WITNESS**
-
-Everything else is under construction. Nothing is added to `primitives/` until it passes the primitive test:
-
-> What becomes impossible that was previously possible?
-
-If that question cannot be answered precisely, it is not a primitive.
