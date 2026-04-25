@@ -1,0 +1,357 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+.fade-in { animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.4 } }
+.pulsing { animation: pulse 1.5s infinite; }
+textarea { font-family: var(--font-sans); font-size: 13px; line-height: 1.7; width: 100%; min-height: 120px; padding: 10px; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: var(--color-background-primary); color: var(--color-text-primary); resize: vertical; }
+textarea.contradiction { border-color: #A32D2D; }
+button { cursor: pointer; padding: 6px 14px; font-size: 12px; font-family: var(--font-mono); background: var(--color-background-primary); color: var(--color-text-primary); border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); transition: background 0.15s; letter-spacing: 0.02em; }
+button:hover:not(:disabled) { background: var(--color-background-secondary); }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+input[type=text] { padding: 8px 12px; font-size: 14px; font-family: var(--font-sans); border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: var(--color-background-primary); color: var(--color-text-primary); width: 100%; }
+input[type=text]:focus { outline: none; border-color: var(--color-border-primary); }
+.tab-btn { border: none; border-radius: 0; border-bottom: 2px solid transparent; background: transparent; padding: 8px 6px; flex: 1; font-size: 10px; font-family: var(--font-mono); color: var(--color-text-tertiary); letter-spacing: 0.05em; cursor: pointer; }
+.tab-btn.active { color: var(--color-text-primary); border-bottom-color: #1D9E75; background: var(--color-background-secondary); }
+</style>
+
+<div id="app" style="border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); overflow: hidden; font-family: var(--font-sans); min-height: 500px;"></div>
+
+<script>
+const SEED_DOCS = [
+  { id:'doc_001', title:'Q3 Strategy Draft', content:'The core thesis for Q3 is market expansion through partnership channels. Primary targets: EMEA and APAC. Budget allocation pending board approval. Key risk: supply chain dependencies in Southeast Asia remain unresolved.', witnesses:[], stability:'SOVEREIGN', version:1, created: Date.now()-86400000*5 },
+  { id:'doc_002', title:'System Architecture Principles', content:'All services must expose health endpoints. No synchronous calls across domain boundaries. Event sourcing for all state changes. Infrastructure as code — no manual provisioning. Every deployment must be reversible within 5 minutes.', witnesses:[], stability:'SOVEREIGN', version:1, created: Date.now()-86400000*12 },
+  { id:'doc_003', title:'Living Data: First Principles', content:'Data is not passive matter. Code is not the only active force. The separation of data from behavior was a practical necessity of early computing — not a law of nature. This project replaces that assumption with six enforceable laws.', witnesses:[], stability:'SOVEREIGN', version:1, created: Date.now()-86400000*2 }
+];
+
+const STABILITY = {
+  SOVEREIGN: { label:'sovereign', desc:'Never witnessed. Maximally fluid, fully isolated.', color:'#888780', bg:'var(--color-background-secondary)', border:'#88878030' },
+  FORMING:   { label:'forming',  desc:'Being shaped by early encounters. Contradictory edits flagged.', color:'#BA7517', bg:'#FAEEDA', border:'#BA751730' },
+  SETTLING:  { label:'settling', desc:'History solidifying. High friction for contradictions.', color:'#185FA5', bg:'#E6F1FB', border:'#185FA530' },
+  SETTLED:   { label:'settled',  desc:'Identity includes witness history. Maximum stability.', color:'#0F6E56', bg:'#E1F5EE', border:'#0F6E5630' }
+};
+
+function calcStability(n) {
+  if (n===0) return 'SOVEREIGN';
+  if (n<=3) return 'FORMING';
+  if (n<=12) return 'SETTLING';
+  return 'SETTLED';
+}
+
+function ft(ts) { return new Date(ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }
+function fd(ts) { return new Date(ts).toLocaleDateString([],{month:'short',day:'numeric'}); }
+
+// STATE
+let accessor = null;
+let entities = {};
+let relationships = {};
+let selectedId = null;
+let editMode = false;
+let editContent = '';
+let contradiction = null;
+let activePanel = 'witness';
+let witnessFlash = null;
+let phase = 'loading';
+let nameInput = '';
+
+// STORAGE HELPERS
+async function sget(k) { try { const r=await window.storage.get(k); return r?JSON.parse(r.value):null; } catch(e){ return null; } }
+async function sset(k,v) { try { await window.storage.set(k,JSON.stringify(v)); } catch(e){} }
+async function slist(p) { try { const r=await window.storage.list(p); return r?r.keys:[]; } catch(e){ return []; } }
+
+// LAW 1+2+3+4+5: The only access operation
+function witnessOp(entity, acc, rels) {
+  if (!acc||!acc.id) return { error: true };
+  const now = Date.now();
+  const snap = entity.content;
+  const wr = { id:`wr_${now}_${Math.random().toString(36).slice(2,6)}`, accessorId:acc.id, accessorName:acc.name, contentAtEncounter:snap, timestamp:now, version:entity.version };
+  const newW = [...entity.witnesses, wr];
+  const newStab = calcStability(newW.length);
+  const imp = { id:`imp_${now}`, entityId:entity.id, entityTitle:entity.title, contentWitnessed:snap, timestamp:now, version:entity.version, attestation:true };
+  const relKey = `${entity.id}:${acc.id}`;
+  const ex = rels[relKey];
+  const rel = { entityId:entity.id, accessorId:acc.id, entityTitle:entity.title, accessorName:acc.name, encounters: ex?[...ex.encounters,wr]:[wr], firstEncounter: ex?ex.firstEncounter:now, lastEncounter:now };
+  return {
+    content: snap, imprint: imp,
+    entityState: {...entity, witnesses:newW, stability:newStab},
+    accessorState: {...acc, imprints:[...acc.imprints, imp]},
+    relationship: rel, relKey, isReturn: !!ex
+  };
+}
+
+// LAW 6: Contradiction detection
+function detectContradiction(entity, acc, newContent, rels) {
+  const rk = `${entity.id}:${acc.id}`;
+  const rel = rels[rk];
+  if (!rel||!rel.encounters.length) return null;
+  const lastSnap = rel.encounters[rel.encounters.length-1].contentAtEncounter;
+  if (newContent !== entity.content && newContent !== lastSnap && lastSnap === entity.content) return null;
+  if (newContent !== lastSnap && newContent !== entity.content) {
+    return { witnessed: lastSnap, proposed: newContent };
+  }
+  return null;
+}
+
+// INIT
+async function init() {
+  const acc = await sget('current-accessor');
+  const entKeys = await slist('entity:');
+  let ents = {};
+  for (const k of entKeys) { const e = await sget(k); if(e) ents[e.id]=e; }
+  if (Object.keys(ents).length===0) {
+    for (const d of SEED_DOCS) { ents[d.id]=d; await sset(`entity:${d.id}`,d); }
+  }
+  entities = ents;
+  const relKeys = await slist('rel:');
+  for (const k of relKeys) { const r=await sget(k); if(r) relationships[`${r.entityId}:${r.accessorId}`]=r; }
+  if (acc) { accessor=acc; phase='ready'; } else { phase='identity'; }
+  render();
+}
+
+async function setIdentity() {
+  if (!nameInput.trim()) return;
+  accessor = { id:`acc_${Date.now()}`, name:nameInput.trim(), identity:nameInput.trim(), imprints:[], createdAt:Date.now() };
+  await sset('current-accessor', accessor);
+  if (Object.keys(entities).length===0) { for (const d of SEED_DOCS){ entities[d.id]=d; await sset(`entity:${d.id}`,d); } }
+  phase='ready'; render();
+}
+
+async function selectDoc(id) {
+  if (!entities[id]||!accessor) return;
+  const result = witnessOp(entities[id], accessor, relationships);
+  if (result.error) return;
+  witnessFlash = { isReturn: result.isReturn, stability: result.entityState.stability }; setTimeout(()=>{ witnessFlash=null; render(); },3000);
+  entities[id] = result.entityState; await sset(`entity:${id}`, result.entityState);
+  accessor = result.accessorState; await sset('current-accessor', accessor);
+  relationships[result.relKey] = result.relationship; await sset(`rel:${result.relKey}`, result.relationship);
+  selectedId=id; editMode=false; contradiction=null; render();
+}
+
+async function saveEdit() {
+  if (!selectedId) return;
+  const e = entities[selectedId];
+  const updated = {...e, content:editContent, version:e.version+1};
+  entities[selectedId]=updated; await sset(`entity:${selectedId}`,updated);
+  editMode=false; contradiction=null; render();
+}
+
+function onEditChange(v) {
+  editContent=v;
+  if (selectedId&&accessor) { contradiction = detectContradiction(entities[selectedId],accessor,v,relationships); }
+  render();
+}
+
+// RENDER
+function render() {
+  const app = document.getElementById('app');
+  if (!app) return;
+  if (phase==='loading') { app.innerHTML=`<div style="padding:2rem;text-align:center;color:var(--color-text-tertiary);font-family:var(--font-mono);font-size:12px;" class="pulsing">initializing witness engine...</div>`; return; }
+  if (phase==='identity') { renderIdentity(app); return; }
+  renderMain(app);
+}
+
+function renderIdentity(app) {
+  app.innerHTML = `
+  <div style="min-height:400px;display:flex;align-items:center;justify-content:center;padding:2rem;">
+    <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:2rem;max-width:380px;width:100%;">
+      <div style="font-family:var(--font-mono);font-size:10px;color:var(--color-text-tertiary);margin-bottom:10px;letter-spacing:0.08em;">LAW 2 — NO ANONYMOUS PARTICIPATION</div>
+      <h2 style="font-size:17px;font-weight:500;margin-bottom:10px;color:var(--color-text-primary);">Identity required</h2>
+      <p style="font-size:13px;color:var(--color-text-secondary);line-height:1.7;margin-bottom:20px;">Anonymous access is not blocked in this system — it is <em>undefined</em>. An observer with no persistent state cannot complete a witness exchange. The operation has no result.</p>
+      <input type="text" id="nameInput" placeholder="Your name" value="${nameInput}" style="margin-bottom:12px;" />
+      <button id="identityBtn" style="width:100%;padding:10px;" ${!nameInput.trim()?'disabled':''}>establish identity →</button>
+      <div style="margin-top:14px;font-family:var(--font-mono);font-size:10px;color:var(--color-text-tertiary);line-height:1.7;">Your imprints are permanent.<br/>Your witness record cannot be removed.</div>
+    </div>
+  </div>`;
+  const inp = document.getElementById('nameInput');
+  const btn = document.getElementById('identityBtn');
+  inp.oninput = (e)=>{ nameInput=e.target.value; btn.disabled=!nameInput.trim(); };
+  inp.onkeydown = (e)=>{ if(e.key==='Enter') setIdentity(); };
+  btn.onclick = setIdentity;
+  inp.focus();
+}
+
+function renderMain(app) {
+  const selEntity = selectedId ? entities[selectedId] : null;
+  const relKey = selectedId&&accessor ? `${selectedId}:${accessor.id}` : null;
+  const selRel = relKey ? relationships[relKey] : null;
+  const sc = selEntity ? STABILITY[selEntity.stability] : null;
+
+  app.innerHTML = `
+  <div style="display:grid;grid-template-columns:200px 1fr 240px;grid-template-rows:auto 1fr;background:var(--color-background-primary);">
+
+    <!-- Header -->
+    <div style="grid-column:1/-1;border-bottom:0.5px solid var(--color-border-tertiary);padding:9px 14px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-family:var(--font-mono);font-size:10px;color:var(--color-text-tertiary);letter-spacing:0.08em;">WITNESSED DOCUMENT SYSTEM &nbsp;·&nbsp; ACCESS = WITNESS &nbsp;·&nbsp; 6 LAWS ACTIVE</div>
+      <div style="display:flex;align-items:center;gap:7px;">
+        <div style="width:6px;height:6px;border-radius:50%;background:#1D9E75;"></div>
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--color-text-secondary);">${accessor?.name}</span>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div style="border-right:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);overflow-y:auto;">
+      <div style="padding:10px 12px 6px;font-family:var(--font-mono);font-size:10px;color:var(--color-text-tertiary);letter-spacing:0.07em;">DOCUMENTS</div>
+      ${Object.values(entities).map(e=>{
+        const s=STABILITY[e.stability]; const isSel=e.id===selectedId;
+        return `<div class="docitem" data-id="${e.id}" style="padding:9px 12px;cursor:pointer;background:${isSel?'var(--color-background-primary)':'transparent'};border-left:2px solid ${isSel?'#1D9E75':'transparent'};transition:all 0.12s;">
+          <div style="font-size:12px;font-weight:${isSel?500:400};color:var(--color-text-primary);margin-bottom:5px;line-height:1.3;">${e.title}</div>
+          <div style="display:flex;align-items:center;gap:5px;">
+            <span style="font-family:var(--font-mono);font-size:10px;padding:1px 5px;border-radius:3px;background:${s.bg};color:${s.color};border:0.5px solid ${s.border};">${s.label}</span>
+            <span style="font-family:var(--font-mono);font-size:10px;color:var(--color-text-tertiary);">${e.witnesses.length}w</span>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    <!-- Main -->
+    <div style="background:var(--color-background-primary);padding:1.25rem;overflow-y:auto;min-height:420px;position:relative;">
+      ${witnessFlash?`<div class="fade-in" style="position:absolute;top:10px;right:10px;left:10px;background:var(--color-background-success);border:0.5px solid var(--color-border-success);border-radius:var(--border-radius-md);padding:9px 12px;z-index:10;">
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--color-text-success);margin-bottom:3px;letter-spacing:0.05em;">WITNESS() COMPLETE — ${witnessFlash.isReturn?'RETURN ENCOUNTER':'FIRST ENCOUNTER'}</div>
+        <div style="font-size:11px;color:var(--color-text-success);font-family:var(--font-mono);">entity.stability → ${witnessFlash.stability} &nbsp;·&nbsp; accessor.imprints.append() &nbsp;·&nbsp; RelationshipObject updated</div>
+      </div>`:''}
+
+      ${!selEntity?`<div style="height:100%;min-height:300px;display:flex;align-items:center;justify-content:center;">
+        <div style="font-family:var(--font-mono);font-size:12px;color:var(--color-text-tertiary);text-align:center;line-height:2;">
+          select a document<br/>
+          <span style="font-size:10px;">opening it = witnessing it<br/>there is no preview<br/>read() does not exist</span>
+        </div>
+      </div>`:
+      `<div>
+        <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:0.5px solid var(--color-border-tertiary);">
+          <h2 style="font-size:16px;font-weight:500;margin-bottom:8px;color:var(--color-text-primary);">${selEntity.title}</h2>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <span style="font-family:var(--font-mono);font-size:10px;padding:2px 6px;border-radius:3px;background:${sc.bg};color:${sc.color};border:0.5px solid ${sc.border};">${sc.label}</span>
+            <span style="font-family:var(--font-mono);font-size:10px;color:var(--color-text-tertiary);">${selEntity.witnesses.length} witness${selEntity.witnesses.length!==1?'es':''}</span>
+            <span style="font-family:var(--font-mono);font-size:10px;color:var(--color-text-tertiary);">v${selEntity.version}</span>
+            ${selRel?`<span style="font-family:var(--font-mono);font-size:10px;color:#185FA5;">${selRel.encounters.length} encounter${selRel.encounters.length!==1?'s':''} with you</span>`:''}
+          </div>
+        </div>
+
+        <div style="margin-bottom:14px;padding:8px 10px;background:var(--color-background-secondary);border-radius:var(--border-radius-md);font-family:var(--font-mono);font-size:11px;color:var(--color-text-secondary);line-height:1.6;">
+          ${sc.desc}
+        </div>
+
+        ${contradiction?`<div class="fade-in" style="margin-bottom:12px;padding:9px 11px;background:var(--color-background-danger);border:0.5px solid var(--color-border-danger);border-radius:var(--border-radius-md);">
+          <div style="font-family:var(--font-mono);font-size:10px;color:var(--color-text-danger);margin-bottom:3px;letter-spacing:0.05em;">LAW 6 — CONTRADICTION VISIBLE</div>
+          <div style="font-size:12px;color:var(--color-text-danger);">This edit contradicts your witnessed state. Not blocked — structurally marked. Irrevocably visible.</div>
+        </div>`:''}
+
+        ${!editMode?
+          `<div style="font-size:13px;line-height:1.8;color:var(--color-text-primary);margin-bottom:14px;">${selEntity.content}</div>
+          <button id="editBtn">edit document</button>`:
+          `<textarea id="editArea" class="${contradiction?'contradiction':''}">${editContent}</textarea>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button id="saveBtn">${contradiction?'save (contradiction recorded)':'save'}</button>
+            <button id="cancelBtn">cancel</button>
+          </div>`
+        }
+      </div>`}
+    </div>
+
+    <!-- Right Panel -->
+    <div style="border-left:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);display:flex;flex-direction:column;">
+      <div style="border-bottom:0.5px solid var(--color-border-tertiary);display:flex;background:var(--color-background-primary);">
+        <button class="tab-btn ${activePanel==='witness'?'active':''}" id="tab-witness">witness</button>
+        <button class="tab-btn ${activePanel==='imprints'?'active':''}" id="tab-imprints">imprints</button>
+        <button class="tab-btn ${activePanel==='laws'?'active':''}" id="tab-laws">laws</button>
+      </div>
+
+      <div style="padding:12px;overflow-y:auto;flex:1;">
+        ${activePanel==='witness'?renderWitnessPanel(selEntity,selRel):''}
+        ${activePanel==='imprints'?renderImprintsPanel():''}
+        ${activePanel==='laws'?renderLawsPanel(selRel,contradiction):''}
+      </div>
+    </div>
+
+  </div>`;
+
+  // Bind events
+  document.querySelectorAll('.docitem').forEach(el=>{
+    el.onmouseenter=()=>{ if(el.dataset.id!==selectedId) el.style.background='var(--color-background-primary)'; };
+    el.onmouseleave=()=>{ if(el.dataset.id!==selectedId) el.style.background='transparent'; };
+    el.onclick=()=>selectDoc(el.dataset.id);
+  });
+  const editBtn=document.getElementById('editBtn');
+  const editArea=document.getElementById('editArea');
+  const saveBtn=document.getElementById('saveBtn');
+  const cancelBtn=document.getElementById('cancelBtn');
+  if(editBtn) editBtn.onclick=()=>{ editContent=selEntity.content; editMode=true; contradiction=null; render(); };
+  if(editArea) { editArea.oninput=(e)=>onEditChange(e.target.value); setTimeout(()=>{ if(editArea){ editArea.value=editContent; editArea.focus(); } },0); }
+  if(saveBtn) saveBtn.onclick=saveEdit;
+  if(cancelBtn) cancelBtn.onclick=()=>{ editMode=false; contradiction=null; render(); };
+  document.getElementById('tab-witness').onclick=()=>{ activePanel='witness'; render(); };
+  document.getElementById('tab-imprints').onclick=()=>{ activePanel='imprints'; render(); };
+  document.getElementById('tab-laws').onclick=()=>{ activePanel='laws'; render(); };
+}
+
+function renderWitnessPanel(selEntity, selRel) {
+  if (!selEntity) return `<div style="font-family:var(--font-mono);font-size:11px;color:var(--color-text-tertiary);line-height:1.8;">select a document<br/>to view its<br/>witness record</div>`;
+  return `
+    <div style="font-family:var(--font-mono);font-size:10px;color:var(--color-text-tertiary);margin-bottom:10px;letter-spacing:0.06em;">WITNESS RECORD</div>
+    ${selEntity.witnesses.length===0?`<div style="font-family:var(--font-mono);font-size:11px;color:var(--color-text-tertiary);line-height:1.8;">No encounters.<br/><span style="font-size:10px;">Sovereign — unwitnessed,<br/>maximally fluid.</span></div>`:''}
+    ${selEntity.witnesses.map((w,i)=>`
+      <div style="margin-bottom:7px;padding:7px 9px;background:var(--color-background-primary);border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);">
+        <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
+          <span style="font-size:12px;font-weight:500;color:var(--color-text-primary);">${w.accessorName}</span>
+          <span style="font-family:var(--font-mono);font-size:10px;color:var(--color-text-tertiary);">${ft(w.timestamp)}</span>
+        </div>
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--color-text-tertiary);">v${w.version} · #${i+1}</div>
+      </div>`).join('')}
+    ${selRel?`
+      <div style="margin-top:14px;margin-bottom:8px;font-family:var(--font-mono);font-size:10px;color:var(--color-text-tertiary);letter-spacing:0.06em;">RELATIONSHIP OBJECT</div>
+      <div style="padding:9px;background:var(--color-background-primary);border-radius:var(--border-radius-md);border:0.5px solid #5DCAA530;">
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--color-text-secondary);line-height:1.8;">
+          <div style="font-weight:500;color:var(--color-text-primary);margin-bottom:4px;">${selRel.accessorName} ↔ doc</div>
+          <div style="color:var(--color-text-tertiary);font-size:10px;">
+            ${selRel.encounters.length} encounter${selRel.encounters.length!==1?'s':''}<br/>
+            first: ${fd(selRel.firstEncounter)}<br/>
+            last: ${fd(selRel.lastEncounter)}<br/>
+            <span style="color:#0F6E56;">first-class object ✓</span>
+          </div>
+        </div>
+      </div>`:''}`;
+}
+
+function renderImprintsPanel() {
+  const imprints = accessor?.imprints||[];
+  return `
+    <div style="font-family:var(--font-mono);font-size:10px;color:var(--color-text-tertiary);margin-bottom:6px;letter-spacing:0.06em;">${(accessor?.name||'').toUpperCase()} — IMPRINTS</div>
+    <div style="font-family:var(--font-mono);font-size:10px;color:var(--color-text-tertiary);margin-bottom:10px;">append-only · cannot be removed</div>
+    ${imprints.length===0?`<div style="font-family:var(--font-mono);font-size:11px;color:var(--color-text-tertiary);">No imprints yet.<br/>Open a document.</div>`:''}
+    ${[...imprints].reverse().map(imp=>`
+      <div style="margin-bottom:7px;padding:7px 9px;background:var(--color-background-primary);border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);">
+        <div style="font-size:12px;font-weight:500;color:var(--color-text-primary);margin-bottom:3px;">${imp.entityTitle}</div>
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--color-text-tertiary);line-height:1.7;">
+          v${imp.version} · ${ft(imp.timestamp)}<br/>
+          ${imp.attestation?`<span style="color:#0F6E56;">✓ attestation capability</span>`:''}
+        </div>
+      </div>`).join('')}`;
+}
+
+function renderLawsPanel(selRel, contr) {
+  const laws = [
+    { n:1, t:'No access without mutation', note:'read() is undefined', active:!!selectedId },
+    { n:2, t:'No anonymous participation', note:'identity required', active:true },
+    { n:3, t:'Irrevocable records', note:'append-only, no delete', active:true },
+    { n:4, t:'State responds to history', note:'stability = f(witnesses)', active:!!selectedId },
+    { n:5, t:'Encounters produce relationship objects', note:'first-class, own state', active:!!selRel },
+    { n:6, t:'Contradictions structurally visible', note:'not blocked — visible', active:!!contr },
+  ];
+  return `
+    <div style="font-family:var(--font-mono);font-size:10px;color:var(--color-text-tertiary);margin-bottom:10px;letter-spacing:0.06em;">6 ACTIVE LAWS</div>
+    ${laws.map(l=>`
+      <div style="margin-bottom:7px;padding:8px 9px;background:var(--color-background-primary);border-radius:var(--border-radius-md);border:0.5px solid ${l.active?'#1D9E7540':'var(--color-border-tertiary)'};">
+        <div style="display:flex;gap:7px;align-items:flex-start;">
+          <span style="font-family:var(--font-mono);font-size:11px;color:${l.active?'#1D9E75':'var(--color-text-tertiary)'};min-width:12px;">${l.active?'✓':'·'}</span>
+          <div>
+            <div style="font-family:var(--font-mono);font-size:9px;color:var(--color-text-tertiary);margin-bottom:1px;">LAW ${l.n}</div>
+            <div style="font-size:11px;color:${l.active?'var(--color-text-primary)':'var(--color-text-tertiary)'};">${l.t}</div>
+            <div style="font-family:var(--font-mono);font-size:10px;color:var(--color-text-tertiary);margin-top:1px;">${l.note}</div>
+          </div>
+        </div>
+      </div>`).join('')}`;
+}
+
+init();
+</script>
