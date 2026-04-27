@@ -1,238 +1,261 @@
 # living-data
 
-**The systems that shape our world — governments, markets, platforms — are making decisions based on signals that are disconnected from how life is actually being lived.**
+> "No system state exists without grounded interaction."
 
-Not because data doesn't exist. Because data was never designed to carry lived experience.
+A **Reality Ingestion and Alignment Engine** — a system that continuously captures real-world human conditions through interaction, aggregates them, contrasts them across regions and time, and makes them visible to the people and systems that need to act on them.
+
+This is not a philosophy project. It is a system specification.
 
 ---
 
-## The Problem
+## What This System Does
 
-Every digital system ever built rests on one silent assumption:
+Every second, somewhere in the world, a condition exists that no system knows about.
+
+A hospital running on a backup generator for 11 days. A school at 180% capacity that the district database lists at 60% enrollment. A farmer planting on a forecast built from data 14 months out of date.
+
+These conditions are invisible — not because they aren't real, but because no system was designed to continuously receive lived experience as input.
+
+This system is designed exactly for that.
+
+---
+
+## Core Loop — What Happens When Someone Opens This System
 
 ```
-read(data) → output
-// data unchanged. reader unchanged. nothing happened.
+1. A real-world condition exists
+       ↓
+2. A human or sensor interacts with it
+       ↓
+3. That interaction is recorded as WITNESS
+       (both the condition and the actor are permanently changed)
+       ↓
+4. The system aggregates witnesses across actors, regions, time
+       ↓
+5. The system contrasts — compares regions, ISPs, hospitals, schools
+       ↓
+6. The result is made visible — map, score, trend, alert
+       ↓
+7. Users and decision-makers update their understanding
+       ↓
+8. Reality improves — or the gap is at least visible
+       ↓
+       └──────────────────────────────→ back to step 1
 ```
 
-Data is passive. Code acts on it. And that works fine — until you need a system to reflect reality as humans actually live it.
-
-Right now, there is no reliable way for the conditions people experience daily — the power that cuts out, the medicine that isn't available, the road that's impassable — to continuously enter the systems that are supposed to respond to them.
-
-Decisions get made on approximations. Conditions become invisible. Nothing improves because nothing was ever seen.
+Nothing in this system runs without step 3. No system state exists without grounded interaction.
 
 ---
 
-## Three Human Scenarios
+## WITNESS — The Unit of Reality
 
-These are not edge cases. They are the everyday texture of life for billions of people.
+WITNESS is not a concept. It is a callable mechanism. It is the only way reality enters this system.
 
----
-
-### Scenario 1 — The Hospital That Doesn't Know It's Failing
-
-A regional hospital in a mid-sized city has been running on a backup generator for 11 days after the main power supply failed. Nurses manually log equipment failures. Patients are being diverted. Surgeries are being postponed.
-
-None of this appears in any government health system. The infrastructure ministry has no record of an extended outage. The health ministry is tracking bed availability, not operational conditions. The national grid reports show "intermittent disruptions" — which is technically accurate.
-
-The system that could respond to this situation does not know the situation exists.
-
-**What living-data changes:** Every interaction with the hospital's environment — a nurse confirming generator status, a patient experiencing a delayed procedure, a doctor logging equipment unavailability — becomes a witness event. The condition enters the system as lived state, not as a report written three weeks later.
-
----
-
-### Scenario 2 — The Farmer Who Can't Trust the Forecast
-
-A smallholder farmer in a drought-prone region plants based on seasonal forecast models maintained by a national agricultural service. The models are updated quarterly. The last field survey was 14 months ago.
-
-This season, soil conditions have changed significantly in her sub-region due to upstream water diversion — a change that happened after the last survey. The forecast says conditions are favorable. Her neighbors, farming the same land for decades, know they aren't.
-
-She plants. The crop fails. The forecast was never wrong — it just wasn't connected to current reality.
-
-**What living-data changes:** Real conditions from real farmers — soil readings, water availability observations, local experience — flow continuously into the model as witness events. The forecast and the ground are no longer disconnected. Her neighbors' knowledge becomes system state, not anecdote.
-
----
-
-### Scenario 3 — The Child Whose School Was Never Counted
-
-A school in a peri-urban neighborhood has been operating at 180% capacity for two years. There are three teachers for nine classes. Children share textbooks. The local education office has the school listed at 60% enrollment — the figure from the last official census, taken before the neighborhood's population doubled after a nearby factory opened.
-
-The district's resource allocation model runs on that census. The school will not receive additional teachers or materials until the next census — scheduled for two years from now.
-
-The system that could fix this doesn't know the problem exists at the scale it exists.
-
-**What living-data changes:** The school's actual conditions — class sizes, resource gaps, teacher-to-student ratios — are witnessed continuously through interaction with the system. Enrollment is not a census figure. It is a living state, updated by every encounter with the school's reality.
-
----
-
-## The Root Cause
-
-These three scenarios look like different problems. They are the same problem.
-
-**The measurement gap:** What systems record (census numbers, quarterly reports, grid averages) is not what humans experience (the generator running for 11 days, the soil that changed, the classroom that's overflowing today).
-
-**The invisibility gap:** Because experience isn't captured as state, conditions can worsen for months — even years — without appearing in any system that could respond. Invisibility protects the problem.
-
-**The accountability gap:** Because conditions are invisible, they can't be compared. Because they can't be compared, there's no pressure to improve. The cycle continues.
-
----
-
-## What We Are Building
-
-A system where the act of experiencing a condition *is* the data point.
-
-Not a report about the condition. Not a measurement taken separately from the experience. The encounter itself becomes state.
-
-This requires replacing the passive-read assumption at the root of every current system with a new primitive:
-
-```
-witness(entity, accessor) → { content, imprint, entityState }
+```typescript
+witness({
+  actor_id:    string,      // persistent identity — anonymous actors are undefined
+  domain:      string,      // "internet" | "power" | "health" | "education" | ...
+  signal_type: string,      // "passive" | "active" | "sensor"
+  value:       any,         // the measured or confirmed condition
+  location:    string,      // GPS-obfuscated region identifier
+  timestamp:   number,      // unix ms
+  confidence:  0.0–1.0      // cross-validation weight
+})
+→ {
+  witness_id:     string,   // irrevocable record
+  actor_imprint:  object,   // permanent change to actor's state
+  domain_state:   object,   // updated domain state for this region
+  stability:      string    // "sovereign" | "forming" | "settling" | "settled"
+}
 ```
 
-Every access is an exchange. Both parties are permanently changed. The condition and the person who experienced it carry a mutual record of the encounter. Neither can behave as if it did not happen.
+**What WITNESS is not:** logging, analytics, a view counter, a transaction record.
+
+**What WITNESS is:** the point where experience becomes system state — permanently, irrevocably, for both the actor and the entity being witnessed.
+
+### One Concrete Example
+
+```
+A user in Abuja opens the system
+  → speed test runs automatically (passive signal)
+  → latency: 120ms, packet loss: 4%, throughput: 1.2 Mbps
+  → user confirms: "this reflects my actual experience" (active signal)
+  → system calls witness({
+        actor_id: "usr_abc123",
+        domain: "internet",
+        signal_type: "active",
+        value: { latency: 120, packet_loss: 4, throughput: 1.2 },
+        location: "NG-FC-ABJ-03",
+        timestamp: 1714210800000,
+        confidence: 0.9
+      })
+  → witness_id recorded — irrevocable
+  → actor carries imprint: "I witnessed internet conditions in ABJ-03 at this state"
+  → regional internet state updates
+  → Abuja's value score recalculates
+  → map reflects new state
+```
+
+That is the entire loop in one interaction. One person. One moment. Reality entered the system.
+
+---
+
+## Domain Model — How This Scales Without Overreaching
+
+This system does not solve everything at once. It operates through **domains** — independent slices of reality, each with its own witness schema, aggregation rules, and contrast dimensions.
+
+Each domain plugs into the same core loop. The primitives (WITNESS, CONTRAST, RECALIBRATION) are the engine. The domains are what the engine runs on.
+
+| Domain | What It Measures | Key Witness Signal |
+|---|---|---|
+| Internet Value | Speed, cost, real usability | Speed test + user confirmation |
+| Power Stability | Uptime, outage duration, reliability | Outage report + duration confirmation |
+| Healthcare Access | Availability, wait times, supply | Appointment outcome + resource flag |
+| Education Conditions | Enrollment vs. capacity, materials | Teacher or student confirmation |
+| Cost of Living | Basket price vs. income | Price report + purchase confirmation |
+
+**First domain in implementation:** Internet Value Index.
+
+Adding a new domain requires:
+1. Define the witness schema for that domain
+2. Define the aggregation rules (how witnesses combine into a regional score)
+3. Define the contrast dimensions (what to compare against)
+4. Define the representation (what users see)
+
+No changes to the core engine.
 
 ---
 
 ## System Architecture
 
 ```
-        ┌──────────────────────────────────────────┐
-        │              REAL WORLD                         │
-        │   (power, health, food, infrastructure)         │
-        └─────────────────┬────────────────────────┘
-                          │
-                          ▼
-                ┌─────────────────┐
-                │     HUMAN          │
-                │  (experience)      │
-                └────────┬────────┘
-                           │
-         ┌───────────────┼────────────────┐
-         ▼               ▼                ▼
-  ┌─────────────┐  ┌───────────┐  ┌──────────────┐
-  │ Device data   │  │ Confirmed.  │  │ System          │
-  │ (passive)     │  │ experience. │  │ sensors         │
-  └──────┬──────┘  └─────┬─────┘  └──────┬───────┘
-          └───────────────┼────────────────┘
-                             │
-                             ▼
-         ┌───────────────────────────────┐
-         │         WITNESS LAYER               │
-         │  experience → system state         │
-         │  both parties permanently           │
-         │  changed. deniability removed.      │
-         └──────────────┬────────────────┘
-                           │
-                           ▼
-         ┌───────────────────────────────┐
-         │          AGGREGATION                │
-         │  region · time · patterns           │
-         └──────────────┬────────────────┘
-                           │
-                           ▼
-         ┌───────────────────────────────┐
-         │           CONTRAST                  │
-         │  compare regions · trends           │
-         │  expose what was invisible          │
-         └──────────────┬────────────────┘
-                           │
-                           ▼
-         ┌───────────────────────────────┐
-         │        REPRESENTATION              │
-         │  conditions made visible           │
-         │  continuously, not by report       │
-         └──────────────┬────────────────┘
-                           │
-                           ▼
-                ┌───────────────┐
-                │     HUMAN       │
-                │  (perception)   │
-                └───────┬───────┘
-                         │
-                         ▼
-         ┌───────────────────────────────┐
-         │        RECALIBRATION               │
-         │  decisions grounded in             │
-         │  current reality                   │
-         └───────────────────────────────┘
+┌─────────────────────────────────────────────────┐
+│                  REAL WORLD                             │
+│  (internet · power · health · food · education)         │
+└──────────────────────┬──────────────────────────┘
+                       │
+                       ▼
+             ┌─────────────────┐
+             │     HUMAN          │
+             │  lived experience. │
+             └────────┬────────┘
                         │
-                        └─────────────────────→ back to real world
+       ┌──────────────┼──────────────┐
+       ▼              ▼              ▼
+  [passive]     [confirmed]     [sensor]
+  device data   experience      system measure
+       └──────────────┼──────────────┘
+                      │
+                      ▼
+       ┌──────────────────────────────┐
+       │         WITNESS LAYER         │
+       │  witness(actor, domain, ...)  │
+       │  both parties permanently     │
+       │  changed · no neutral access  │
+       └──────────────┬───────────────┘
+                      │
+                      ▼
+       ┌──────────────────────────────┐
+       │          AGGREGATION          │
+       │  region · time · confidence   │
+       └──────────────┬───────────────┘
+                      │
+                      ▼
+       ┌──────────────────────────────┐
+       │           CONTRAST            │
+       │  region vs region · ISP vs   │
+       │  ISP · today vs last month   │
+       └──────────────┬───────────────┘
+                      │
+                      ▼
+       ┌──────────────────────────────┐
+       │        REPRESENTATION         │
+       │  map · score · trend · alert  │
+       └──────────────┬───────────────┘
+                      │
+                      ▼
+             ┌─────────────────┐
+             │     HUMAN        │
+             │  perception      │
+             └────────┬─────────┘
+                      │
+                      ▼
+       ┌──────────────────────────────┐
+       │        RECALIBRATION          │
+       │  decisions grounded in        │
+       │  current witnessed reality    │
+       └──────────────────────────────┘
+                      │
+                      └─────────────────→ back to real world
 ```
 
 ---
 
-## The Six System Laws
+## The Three Primitives
 
-A system built on living-data is defined by what is **impossible** inside it — not what is encouraged.
+### WITNESS `status: SETTLED`
+The only operation that returns system state. Calling it permanently changes both the entity and the actor. There is no read-only mode.
 
-```
-LAW 1: Accessing data without altering it → undefined
-LAW 2: Anonymous participation → undefined
-LAW 3: Deleting a witness record → undefined
-LAW 4: Data that does not change with its witness history → not a living-data system
-LAW 5: A first encounter that produces no relationship object → not a living-data system
-LAW 6: A contradiction that is invisible → not a living-data system
-```
+### CONTRAST `status: DRAFT`
+A comparison operation across regions, systems, or time. A condition has no meaning without something to compare it against. Nigeria vs. Kenya. ISP A vs. ISP B. This week vs. last month.
 
-See [`LAWS.md`](./LAWS.md) for precise, code-form definitions and compliance tests.
+### RECALIBRATION `status: DRAFT`
+The structural update of interpretation when new witnessed conditions arrive. Not a manual refresh — a consequence of accumulated witness state crossing a threshold.
 
 ---
 
-## Core Primitives
-
-**WITNESS**
-The only access operation. Returns content while permanently changing both the entity and the accessor. There is no `read()`. `Status: SETTLED`
-
-**CONTRAST**
-A comparison operation across regions, systems, or time. Conditions are only meaningful when placed against other conditions. `Status: DRAFT`
-
-**RECALIBRATION**
-Adjustment of understanding based on new witnessed conditions — not a manual update, a structural response to accumulated witness state. `Status: DRAFT`
-
----
-
-## What Makes This Different
-
-Existing systems record *events*. A transaction happened. A form was submitted. A sensor fired.
-
-This system records *experience as state*. The moment a nurse interacts with a failing generator, that encounter permanently modifies both the system's understanding of that hospital's condition and the nurse's standing as a witness to it. Neither can be undone.
-
-> Blockchain proves something occurred.
-> WITNESS captures that the experience was real.
-
-Those are not the same operation.
-
----
-
-## Repository Map
+## System Laws — What Is Impossible Here
 
 ```
-LAWS.md                         — six system laws with compliance tests
-MANIFESTO.md                    — the foundational argument
-primitives/                     — formal definitions of each primitive
-  WITNESS.md                    — settled
-  ACKNOWLEDGE.md                — draft
-  _template.md                  — structure for future primitives
-architecture/
-  assumptions-broken.md         — what current architecture gets wrong
-  ontology.md                   — the three intrinsic properties of living data
-implementation/
-  witness-spec.md               — technical specification
-  domain-candidates.md          — where to build first
-examples/
-  witnessed-document-app/       — minimal running system, all 6 laws enforced
-log/
-  decisions.md                  — settled decisions, append-only
+LAW 1: read(entity) → content          — UNDEFINED. No neutral access.
+LAW 2: witness(entity, anonymous)      — UNDEFINED. No persistent state to write to.
+LAW 3: witnesses.delete(record)        — UNDEFINED. Append-only. Forever.
+LAW 4: entity.behavior == initial      — INVALID. State must respond to witness history.
+        after 100 witnesses
+LAW 5: no RelationshipObject after     — INVALID. Encounter produces first-class object.
+        first encounter
+LAW 6: contradiction.isVisible == false — INVALID. Contradictions are always visible.
 ```
+
+See [`LAWS.md`](./LAWS.md) for precise code-form definitions and non-compliance tests.
 
 ---
 
-## Guiding Principle
+## What Currently Exists
 
-> What is experienced becomes visible.
-> What is visible becomes improvable.
-> What is measured becomes what is seen.
+| File | Status | What it contains |
+|---|---|---|
+| `LAWS.md` | Complete | Six system laws with compliance tests |
+| `primitives/WITNESS.md` | Settled | Full definition, anatomy, failure cases |
+| `primitives/ACKNOWLEDGE.md` | Draft | Derived from WITNESS |
+| `implementation/witness-spec.md` | Draft | TypeScript spec, state machine |
+| `implementation/domain-candidates.md` | Draft | Four domains ranked for first build |
+| `examples/witnessed-document-app/` | Running | Minimal system — all 6 laws enforced |
+| `architecture/assumptions-broken.md` | Complete | Five broken assumptions of current architecture |
+| `log/decisions.md` | Live | Settled decisions, append-only |
 
-The bottleneck has never been data volume. It has been the distance between experience and state.
+---
 
-This project closes that distance.
+## What Gets Built Next
+
+**Phase 1 — Internet Value Index (current)**
+One domain. One running witness loop. Real data. Real users. Real regional scores.
+
+**Phase 2 — Power Stability + Cost of Living**
+Two domains plugged into the same engine. Witness schema differs. Core loop identical.
+
+**Phase 3 — Composite Human Outcome Index**
+Cross-domain aggregation. A region's overall condition score built from multiple witnessed domains.
+
+---
+
+## For Builders
+
+If you want to contribute, the entry point is clear:
+
+1. Read [`LAWS.md`](./LAWS.md) — understand what the system cannot do
+2. Read [`primitives/WITNESS.md`](./primitives/WITNESS.md) — understand the only access operation
+3. Run [`examples/witnessed-document-app/`](./examples/witnessed-document-app/) — see all six laws running
+4. Read [`implementation/domain-candidates.md`](./implementation/domain-candidates.md) — pick where to build
+
+The first function you write should be `witness()`. Everything else is built on top of it.
